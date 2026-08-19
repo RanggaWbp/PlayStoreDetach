@@ -43,48 +43,34 @@ jobs:
         with:
           fetch-depth: 0
 
-           - name: Ekstrak versi & tanggal
+      - name: Ekstrak versi & tanggal
         id: ver
         run: |
           # Prioritas sumber versi:
-          # 1. Tag push (refs/tags/v1.0.0)  2. module.prop
-          SOURCE="module.prop"
+          # 1. Tag push (refs/tags/v2.2.0)  2. module.prop
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            RAW="${GITHUB_REF#refs/tags/v}"
-            SOURCE="git tag"
+            VERSION="${GITHUB_REF#refs/tags/v}"
           else
-            RAW=$(grep '^version=' module/module.prop | head -1 | \
-                  cut -d'=' -f2 | tr -d '\r' | sed 's/^[vV]//' | sed 's/[[:space:]]//g')
+            VERSION=$(grep '^version=' module/module.prop | head -1 | \
+                      cut -d'=' -f2 | tr -d '\r' | sed 's/^[vV]//')
           fi
 
-          echo "Versi mentah dari $SOURCE: '$RAW'"
-
-          # Validasi: terima x, x.y, atau x.y.z (angka saja)
-          if ! [[ "$RAW" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
-            echo "::error::Versi '$RAW' (dari $SOURCE) tidak valid. Format: x, x.y, atau x.y.z. Contoh: 1.0.0"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Versi '$VERSION' tidak valid (harus x.y.z)"
             exit 1
           fi
 
-          # NORMALISASI OTOMATIS:
-          #   "1"   → "1.0.0"
-          #   "1.0" → "1.0.0"
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$RAW"
-          MAJOR=${MAJOR:-0}
-          MINOR=${MINOR:-0}
-          PATCH=${PATCH:-0}
-          VERSION="$MAJOR.$MINOR.$PATCH"
+          # versionCode: 2.2.0 → 20200
+          VC=$(echo "$VERSION" | awk -F'.' '{print $1*10000 + $2*100 + $3}')
 
-          # versionCode: 1.0.0 → 10000 | 2.1.0 → 20100
-          VC=$((MAJOR*10000 + MINOR*100 + PATCH))
-
-          # Tanggal tgl-bln-thn (WIB)
+          # Tanggal format tgl-bln-thn (WIB)
           DATE=$(TZ='Asia/Jakarta' date +'%d-%m-%Y')
 
           echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
           echo "version_code=$VC"     >> "$GITHUB_OUTPUT"
           echo "date=$DATE"           >> "$GITHUB_OUTPUT"
 
-          echo "📦 Versi   : v$VERSION (versionCode: $VC) [sumber: $SOURCE]"
+          echo "📦 Versi   : v$VERSION (versionCode: $VC)"
           echo "📅 Tanggal : $DATE"
 
       - name: Cek tag & release (idempoten — anti rilis ganda)
