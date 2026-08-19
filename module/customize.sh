@@ -45,7 +45,7 @@ touch "$MODPATH/config/detach.list"
 
 ui_print " "
 ui_print "  ╔══════════════════════════════════════╗"
-ui_print "  ║   Zygisk Detach v2.1 — Terinstall!   ║"
+ui_print "  ║   PlayStoreDetach V1.0 — Terinstall! ║"
 ui_print "  ╠══════════════════════════════════════╣"
 ui_print "  ║  Kelola daftar via WebUI di          ║"
 ui_print "  ║  KernelSU/APatch Manager, atau edit: ║"
