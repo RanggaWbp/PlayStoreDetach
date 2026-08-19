@@ -40,8 +40,6 @@ jobs:
       - name: Extract version and date
         id: ver
         run: |
-          # Version source priority:
-          # 1. Pushed tag (refs/tags/v1.0.0)  2. module.prop
           SOURCE="module.prop"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             RAW="${GITHUB_REF#refs/tags/v}"
@@ -53,33 +51,28 @@ jobs:
 
           echo "Raw version from $SOURCE: '$RAW'"
 
-          # Accept x, x.y, or x.y.z (digits only)
           if ! [[ "$RAW" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
-            echo "::error::Invalid version '$RAW' (from $SOURCE). Expected: x, x.y, or x.y.z (e.g. 1.0.0)"
+            echo "::error::Invalid version '$RAW'. Expected: x, x.y, or x.y.z (e.g. 1.0.0)"
             exit 1
           fi
 
-          # AUTO-NORMALIZE: "1" -> "1.0.0", "1.0" -> "1.0.0"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$RAW"
           MAJOR=${MAJOR:-0}
           MINOR=${MINOR:-0}
           PATCH=${PATCH:-0}
           VERSION="$MAJOR.$MINOR.$PATCH"
 
-          # versionCode: 1.0.0 -> 10000 | 2.1.0 -> 20100
           VC=$((MAJOR*10000 + MINOR*100 + PATCH))
-
-          # Date format: dd-mm-yyyy (WIB timezone)
           DATE=$(TZ='Asia/Jakarta' date +'%d-%m-%Y')
 
-          echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
-          echo "version_code=$VC"     >> "$GITHUB_OUTPUT"
-          echo "date=$DATE"           >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VC" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
 
-          echo "Version     : v$VERSION (versionCode: $VC) [source: $SOURCE]"
+          echo "Version     : v$VERSION (versionCode: $VC)"
           echo "Release date: $DATE"
 
-      - name: Check tag and release (prevent duplicate releases)
+      - name: Check tag and release (prevent duplicates)
         id: check
         run: |
           TAG="v${{ steps.ver.outputs.version }}"
@@ -93,15 +86,12 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG")
           [ "$HTTP" = "200" ] && RELEASE_EXISTS="yes"
 
-          echo "Tag $TAG exists?     : $TAG_EXISTS"
-          echo "Release $TAG exists? : $RELEASE_EXISTS"
-
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
-            echo "Force mode -> PROCEED"; RESULT="true"
+            RESULT="true"
           elif [ "$TAG_EXISTS" = "yes" ] && [ "$RELEASE_EXISTS" = "yes" ]; then
-            echo "Already released -> SKIP"; RESULT="false"
+            RESULT="false"
           else
-            echo "New version -> PROCEED"; RESULT="true"
+            RESULT="true"
           fi
           echo "should_release=$RESULT" >> "$GITHUB_OUTPUT"
 
@@ -156,7 +146,6 @@ jobs:
           VC="${{ needs.prepare.outputs.version_code }}"
           DATE="${{ needs.prepare.outputs.date }}"
 
-          # Inject final version and release date into module.prop
           sed -i "s/^version=.*/version=v${VERSION}/" module/module.prop
           sed -i "s/^versionCode=.*/versionCode=${VC}/" module/module.prop
           sed -i "s|^description=.*|description=Universal Play Store Detach - Android 7-17+ \| Released ${DATE}|" module/module.prop
@@ -177,32 +166,29 @@ jobs:
           done
           echo "All 4 architectures built successfully"
 
-          - name: Package module (files at zip ROOT)
+      - name: Package module
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           DATE="${{ needs.prepare.outputs.date }}"
           ZIP="PlayStoreDetach-v${VERSION}-${DATE}.zip"
 
-          # ========================================================
-          # FIX: pastikan folder output ada SEBELUM cd ke sana
-          # ========================================================
           mkdir -p output
           cd output
 
           rm -rf PlayStoreDetach "$ZIP" "${ZIP}.sha256"
-          mkdir -p PlayStoreDetach/zygisk/{arm64-v8a,armeabi-v7a,x86_64,x86}
+          mkdir -p PlayStoreDetach/zygisk/arm64-v8a
+          mkdir -p PlayStoreDetach/zygisk/armeabi-v7a
+          mkdir -p PlayStoreDetach/zygisk/x86_64
+          mkdir -p PlayStoreDetach/zygisk/x86
           mkdir -p PlayStoreDetach/META-INF/com/google/android
 
-          # Copy module files
           cp -r ../module/* PlayStoreDetach/
 
-          # Copy native libraries
           cp ../build/arm64-v8a/libzygisk-detach.so    PlayStoreDetach/zygisk/arm64-v8a/
           cp ../build/armeabi-v7a/libzygisk-detach.so  PlayStoreDetach/zygisk/armeabi-v7a/
           cp ../build/x86_64/libzygisk-detach.so       PlayStoreDetach/zygisk/x86_64/
           cp ../build/x86/libzygisk-detach.so          PlayStoreDetach/zygisk/x86/
 
-          # Generate recovery installer files (inline)
           echo "#MAGISK" > PlayStoreDetach/META-INF/com/google/android/updater-script
 
           cat > PlayStoreDetach/META-INF/com/google/android/update-binary <<'BINARY_EOF'
@@ -225,30 +211,24 @@ jobs:
           exit 0
           BINARY_EOF
 
-          # Fix permissions
           chmod 0755 PlayStoreDetach/*.sh 2>/dev/null || true
           chmod 0755 PlayStoreDetach/META-INF/com/google/android/update-binary
 
-          # ========================================================
-          # KEY: zip dari DALAM folder pakai "."
-          # → module.prop berada di ROOT zip (yang diminta KSU/Magisk)
-          # ========================================================
           cd PlayStoreDetach
           zip -r9 "../$ZIP" .
           cd ..
 
           sha256sum "$ZIP" > "${ZIP}.sha256"
 
-          # Verifikasi struktur
           echo "================ ZIP STRUCTURE ================"
           unzip -l "$ZIP"
           echo "================================================"
 
           if ! unzip -l "$ZIP" | grep -q " module.prop$"; then
-            echo "::error::module.prop not found at zip root! Packaging failed."
+            echo "::error::module.prop not found at zip root!"
             exit 1
           fi
-          echo "Structure check PASSED: module.prop is at zip root"
+          echo "Structure check PASSED"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -277,7 +257,7 @@ jobs:
           name: module-build
           path: artifact/
 
-      - name: Generate update.json (Magisk auto-update)
+      - name: Generate update.json
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           VC="${{ needs.prepare.outputs.version_code }}"
@@ -330,13 +310,13 @@ jobs:
             | Architecture | arm64-v8a, armeabi-v7a, x86_64, x86 |
 
             ## Installation
-            1. Download `PlayStoreDetach-v${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.date }}.zip`
+            1. Download the module zip file below
             2. Install via Magisk / KernelSU / APatch
             3. **KernelSU/APatch:** make sure ReZygisk is installed first
             4. Reboot
             5. Manage detach list via WebUI in the manager app
 
-            > Verify file integrity with the `.sha256` file
+            > Verify file integrity with the .sha256 file
           files: |
             artifact/PlayStoreDetach-v*
             artifact/update.json
