@@ -1,368 +1,1018 @@
+
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>PlaystoreDetach</title>
+<title>Detach Manager</title>
 <style>
-:root{
-  color-scheme: dark;
-  --md-bg:#111318;
-  --md-surface:#1a1c22;
-  --md-surface-2:#22252c;
-  --md-surface-3:#2a2d35;
-  --md-outline:#43474e;
-  --md-primary:#a9c7ff;
-  --md-on-primary:#0a305f;
-  --md-primary-container:#274777;
-  --md-on-primary-container:#d6e3ff;
-  --md-error:#ffb4ab;
-  --md-error-container:#5a1a15;
-  --md-on-error-container:#ffdad4;
-  --md-tertiary:#ffb59a;
-  --md-on-surface:#e3e2e6;
-  --md-on-surface-variant:#c4c6d0;
-  --radius-lg:28px;
-  --radius-md:16px;
-  --radius-sm:10px;
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0}
-body{
-  font-family: "Google Sans", "Roboto", -apple-system, "Segoe UI", sans-serif;
-  background:var(--md-bg);
-  color:var(--md-on-surface);
-  padding:12px 16px calc(24px + env(safe-area-inset-bottom));
-  max-width:640px;
-  margin:0 auto;
-  min-height:100vh;
+/* ── Android 17 Dynamic Color tokens ── */
+:root {
+  --bg:         #0e1117;
+  --bg2:        #151920;
+  --surface:    #1c2029;
+  --surf2:      #242833;
+  --surf3:      #2d3240;
+  --outline:    #383d4a;
+  --outline2:   #4a5060;
+
+  --green:      #1adf7a;
+  --green-dim:  rgba(26,223,122,.15);
+  --green-ring: rgba(26,223,122,.35);
+  --on-green:   #00210d;
+
+  --blue:       #a9c7ff;
+  --blue-dim:   rgba(169,199,255,.12);
+  --on-blue:    #00305f;
+
+  --red:        #ffb4ab;
+  --red-dim:    rgba(255,180,171,.12);
+  --red-cont:   #3b0906;
+
+  --text:       #e4e6f0;
+  --text2:      #9ea4b4;
+  --text3:      #636878;
+
+  --r-xl: 28px;
+  --r-lg: 20px;
+  --r-md: 16px;
+  --r-sm: 12px;
+  --r-xs: 8px;
+
+  --shadow: 0 2px 12px rgba(0,0,0,.5);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,.6);
 }
 
-.topbar{padding:20px 4px 12px}
-.topbar .eyebrow{font-size:.75rem;font-weight:600;letter-spacing:.08em;color:var(--md-primary);text-transform:uppercase}
-.topbar h1{font-size:1.75rem;font-weight:500;margin:2px 0 0;letter-spacing:-.01em}
-.topbar .desc{font-size:.85rem;color:var(--md-on-surface-variant);margin-top:6px}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+html { height: 100%; }
 
-.status-row{display:flex;gap:10px;margin:16px 0}
-.status-card{
-  flex:1;background:var(--md-surface);border-radius:var(--radius-md);
-  padding:14px 16px;border:1px solid var(--md-outline);
+body {
+  font-family: "Google Sans", "Roboto", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 0 0 env(safe-area-inset-bottom);
+  overscroll-behavior: none;
 }
-.status-card .label{font-size:.7rem;color:var(--md-on-surface-variant);font-weight:500}
-.status-card .value{font-size:1.15rem;font-weight:600;margin-top:4px}
 
-.banner{
-  display:none;background:var(--md-error-container);color:var(--md-on-error-container);
-  border-radius:var(--radius-md);padding:12px 14px;font-size:.82rem;margin-bottom:14px;
-  line-height:1.4;
+/* ── HEADER ── */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
+  padding: 52px 20px 0;
+  padding-top: calc(52px + env(safe-area-inset-top));
 }
-.banner.show{display:block}
 
-.segmented{display:flex;background:var(--md-surface);border-radius:999px;padding:4px;margin-bottom:12px;border:1px solid var(--md-outline)}
-.segment{flex:1;text-align:center;padding:9px 4px;border-radius:999px;font-size:.85rem;font-weight:500;cursor:pointer;color:var(--md-on-surface-variant)}
-.segment.active{background:var(--md-primary-container);color:var(--md-on-primary-container)}
-
-.search-wrap{position:relative;margin-bottom:14px}
-.search-box{
-  width:100%;padding:13px 44px 13px 44px;background:var(--md-surface-2);
-  border:1px solid var(--md-outline);border-radius:var(--radius-lg);
-  color:var(--md-on-surface);font-size:.92rem;outline:none;
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
 }
-.search-box:focus{border-color:var(--md-primary)}
-.search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);opacity:.7;font-size:1rem}
-.search-clear{position:absolute;right:10px;top:50%;transform:translateY(-50%);opacity:.6;font-size:.85rem;
-  background:none;border:none;color:var(--md-on-surface-variant);padding:6px;cursor:pointer;display:none}
-.search-clear.show{display:block}
-.search-hint{font-size:.72rem;color:var(--md-on-surface-variant);margin:-8px 2px 12px;display:none}
-.search-hint.show{display:block}
 
-.pkg-list{display:flex;flex-direction:column;gap:6px}
-.pkg-item{
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-  background:var(--md-surface);border-radius:var(--radius-md);padding:12px 14px;
+.header-title h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -.4px;
+  line-height: 1.15;
 }
-.pkg-main{min-width:0}
-.pkg-name{font-size:.85rem;font-weight:500;word-break:break-all;line-height:1.3}
-.pkg-tag{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;color:var(--md-primary);margin-top:3px;font-weight:600}
-.pkg-tag.system{color:var(--md-tertiary)}
-.chip{
-  border:none;border-radius:999px;padding:8px 16px;font-size:.78rem;font-weight:600;cursor:pointer;
-  white-space:nowrap;flex-shrink:0;
-}
-.chip-add{background:var(--md-primary-container);color:var(--md-on-primary-container)}
-.chip-remove{background:var(--md-error-container);color:var(--md-on-error-container)}
 
-.empty-state{text-align:center;padding:48px 20px;color:var(--md-on-surface-variant);font-size:.85rem;line-height:1.6}
-.empty-state .big{font-size:2rem;display:block;margin-bottom:8px;opacity:.5}
-.loading{text-align:center;padding:36px;color:var(--md-on-surface-variant);font-size:.85rem}
-
-.actions{margin-top:22px;display:flex;flex-direction:column;gap:8px}
-.action-btn{
-  width:100%;padding:14px 16px;background:var(--md-surface);border:1px solid var(--md-outline);
-  border-radius:var(--radius-md);color:var(--md-on-surface);font-size:.88rem;font-weight:500;
-  cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;
+.header-title .subtitle {
+  font-size: 13px;
+  color: var(--text2);
+  margin-top: 3px;
+  font-weight: 400;
 }
-.action-btn.danger{color:var(--md-error)}
 
-.toast{
-  position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(20px);
-  background:var(--md-surface-3);color:var(--md-on-surface);padding:12px 20px;border-radius:var(--radius-lg);
-  font-size:.82rem;opacity:0;transition:opacity .2s, transform .2s;pointer-events:none;z-index:100;
-  box-shadow:0 4px 16px rgba(0,0,0,.4);max-width:90%;text-align:center;
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--green-dim);
+  border: 1px solid var(--green-ring);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 4px;
 }
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.badge-pill .dot {
+  width: 6px; height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── SEARCH ── */
+.search-wrap {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px; height: 20px;
+  color: var(--text3);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.search-box {
+  width: 100%;
+  padding: 14px 44px 14px 48px;
+  background: var(--surface);
+  border: 1.5px solid var(--outline);
+  border-radius: var(--r-xl);
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .15s, background .15s;
+  -webkit-appearance: none;
+}
+
+.search-box::placeholder { color: var(--text3); }
+
+.search-box:focus {
+  border-color: var(--green);
+  background: var(--bg2);
+}
+
+.search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px; height: 32px;
+  background: var(--surf2);
+  border: none;
+  border-radius: 50%;
+  color: var(--text2);
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background .12s;
+}
+.search-clear.show { display: flex; }
+.search-clear:active { background: var(--surf3); }
+
+.search-hint {
+  display: none;
+  font-size: 12px;
+  color: var(--text2);
+  padding: 0 4px 4px;
+  line-height: 1.5;
+}
+.search-hint.show { display: block; }
+.search-hint span { color: var(--green); font-weight: 500; }
+
+/* ── TABS ── */
+.tabs {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  flex-shrink: 0;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1.5px solid var(--outline);
+  background: transparent;
+  color: var(--text2);
+  font-family: inherit;
+  transition: all .15s;
+  white-space: nowrap;
+  -webkit-appearance: none;
+}
+.tab.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--on-green);
+  font-weight: 600;
+}
+.tab:not(.active):active { background: var(--surf2); }
+
+/* ── BANNER ── */
+.banner {
+  display: none;
+  margin: 0 20px 14px;
+  padding: 12px 16px;
+  background: var(--red-cont);
+  border: 1px solid rgba(255,180,171,.2);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  color: var(--red);
+  line-height: 1.5;
+}
+.banner.show { display: block; }
+
+/* ── MAIN SCROLL AREA ── */
+.scroll-area {
+  padding: 0 20px;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+/* ── STATUS CARDS ── */
+.stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  border: 1px solid var(--outline);
+}
+
+.stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+
+.stat-val {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.stat-val.green { color: var(--green); }
+
+/* ── PACKAGE LIST ── */
+.pkg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* card base */
+.pkg-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-radius: var(--r-md);
+  border: 1.5px solid transparent;
+  transition: border-color .15s, background .15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.pkg-item.is-detached {
+  background: var(--bg2);
+  border-color: var(--green-ring);
+}
+
+/* left accent bar for detached */
+.pkg-item.is-detached::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--green);
+  border-radius: 3px 0 0 3px;
+}
+
+.pkg-main { min-width: 0; flex: 1; }
+
+.pkg-name {
+  font-size: 14px;
+  font-family: "Roboto Mono", "Courier New", monospace;
+  font-weight: 400;
+  word-break: break-all;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.pkg-item.is-detached .pkg-name { color: var(--text); }
+
+.pkg-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  margin-top: 4px;
+  color: var(--text3);
+}
+
+.pkg-status.detached {
+  color: var(--green);
+}
+
+.pkg-status.detached::before {
+  content: '';
+  width: 5px; height: 5px;
+  background: var(--green);
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* toggle switch */
+.toggle {
+  position: relative;
+  flex-shrink: 0;
+  width: 50px; height: 28px;
+  cursor: pointer;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0; height: 0;
+  position: absolute;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--surf3);
+  border: 1.5px solid var(--outline2);
+  transition: background .2s, border-color .2s;
+}
+
+.toggle input:checked ~ .toggle-track {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 4px; left: 4px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--text3);
+  transition: transform .2s, background .2s, width .15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+
+.toggle input:checked ~ .toggle-thumb {
+  transform: translateX(22px);
+  background: var(--on-green);
+}
+
+/* press feedback */
+.toggle:active .toggle-thumb { width: 24px; }
+
+/* ── EMPTY / LOADING STATES ── */
+.state-box {
+  text-align: center;
+  padding: 52px 20px;
+  color: var(--text3);
+}
+
+.state-box .icon {
+  font-size: 40px;
+  display: block;
+  margin-bottom: 12px;
+  opacity: .6;
+}
+
+.state-box p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text2);
+}
+
+.state-box small {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text3);
+}
+
+/* skeleton loader */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skel-item {
+  height: 62px;
+  background: var(--surface);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  position: relative;
+}
+
+.skel-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.04) 50%, transparent 100%);
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ── BOTTOM ACTIONS ── */
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0; right: 0;
+  background: linear-gradient(to top, var(--bg) 80%, transparent);
+  padding: 12px 20px calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+  z-index: 40;
+}
+
+.btn {
+  flex: 1;
+  padding: 13px 16px;
+  border-radius: var(--r-lg);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1.5px solid var(--outline);
+  background: var(--surface);
+  color: var(--text);
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  -webkit-appearance: none;
+}
+
+.btn:active { transform: scale(.97); }
+
+.btn-primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--on-green);
+  font-weight: 600;
+}
+
+.btn-danger {
+  border-color: rgba(255,180,171,.3);
+  color: var(--red);
+}
+
+/* ── OVERFLOW MENU ── */
+.more-btn {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: background .12s;
+  z-index: 10;
+}
+.more-btn:active { background: var(--surf2); }
+
+.dropdown {
+  position: fixed;
+  right: 16px;
+  background: var(--surf2);
+  border-radius: var(--r-md);
+  border: 1px solid var(--outline);
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  min-width: 190px;
+  overflow: hidden;
+  display: none;
+  animation: pop .12s ease-out;
+}
+.dropdown.show { display: block; }
+
+@keyframes pop {
+  from { opacity: 0; transform: scale(.95) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.dd-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  background: none;
+  border: none;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  transition: background .1s;
+}
+.dd-item:active { background: var(--surf3); }
+.dd-item.danger { color: var(--red); }
+.dd-sep { height: 1px; background: var(--outline); margin: 4px 0; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--surf3);
+  color: var(--text);
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 300;
+  transition: opacity .18s, transform .18s;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--outline2);
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── SECTION LABEL ── */
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 0 2px 8px;
+}
+
+/* ── DIVIDER ── */
+.divider { height: 1px; background: var(--outline); margin: 4px 0 14px; }
+
+/* ── OVERLAY ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+}
+.overlay.show { display: block; }
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="eyebrow">PlaystoreDetach</div>
-  <h1>Kelola Detach</h1>
-  <p class="desc" id="subtitle">Memuat status perangkat…</p>
+<!-- HEADER -->
+<div class="header">
+  <div class="header-row">
+    <div class="header-title">
+      <h1>Detach Manager</h1>
+      <div class="subtitle" id="subtitle">Loading…</div>
+    </div>
+    <div class="badge-pill">
+      <span class="dot"></span>
+      <span id="badge-count">0</span> detached
+    </div>
+  </div>
+
+  <div class="search-wrap">
+    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+    <input class="search-box" id="search" type="search"
+           placeholder="Search packages…" autocomplete="off"
+           autocorrect="off" autocapitalize="none" spellcheck="false">
+    <button class="search-clear" id="search-clear" aria-label="Clear">✕</button>
+  </div>
+
+  <div class="search-hint" id="search-hint">
+    Press <span>Enter ↵</span> to detach this package directly
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" id="tab-detached"   onclick="switchTab('detached')">Detached</button>
+    <button class="tab"         id="tab-user"       onclick="switchTab('user')">User Apps</button>
+    <button class="tab"         id="tab-system"     onclick="switchTab('system')">System Apps</button>
+  </div>
 </div>
 
+<!-- BANNER: no bridge -->
 <div class="banner" id="bridge-banner">
-  WebUI ini butuh dibuka dari dalam aplikasi manager KernelSU / APatch / Magisk agar bisa membaca daftar aplikasi. Membuka lewat browser biasa tidak akan berfungsi.
+  ⚠ Open this WebUI from KernelSU / APatch / Magisk manager to read installed packages. Manual package entry via search still works.
 </div>
 
-<div class="status-row">
-  <div class="status-card">
-    <div class="label">Terputus</div>
-    <div class="value" id="stat-count">–</div>
+<!-- MAIN SCROLL -->
+<div class="scroll-area">
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">Detached</div>
+      <div class="stat-val green" id="stat-count">–</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Android</div>
+      <div class="stat-val" id="stat-android">–</div>
+    </div>
   </div>
-  <div class="status-card">
-    <div class="label">Android</div>
-    <div class="value" id="stat-android">–</div>
+
+  <div id="pkg-list" class="pkg-list">
+    <div class="skeleton">
+      <div class="skel-item"></div>
+      <div class="skel-item"></div>
+      <div class="skel-item"></div>
+      <div class="skel-item"></div>
+    </div>
   </div>
 </div>
 
-<div class="segmented">
-  <div class="segment active" id="tab-detached" onclick="switchTab('detached')">Terputus</div>
-  <div class="segment" id="tab-user" onclick="switchTab('user')">App Terpasang</div>
-  <div class="segment" id="tab-system" onclick="switchTab('system')">App Sistem</div>
+<!-- BOTTOM ACTIONS -->
+<div class="bottom-bar">
+  <button class="btn" onclick="restartPlayStore()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    Restart Play Store
+  </button>
+  <button class="btn btn-primary" onclick="toggleDropdown()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+    More
+  </button>
 </div>
 
-<div class="search-wrap">
-  <span class="search-icon">🔍</span>
-  <input class="search-box" id="search" type="text" inputmode="text" autocomplete="off"
-         placeholder="Cari nama package, mis. com.spotify.music">
-  <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+<!-- DROPDOWN MENU -->
+<div class="overlay" id="overlay" onclick="closeDropdown()"></div>
+<div class="dropdown" id="dropdown">
+  <button class="dd-item" onclick="viewLog()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    View log
+  </button>
+  <button class="dd-item" onclick="reloadPackages()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    Reload packages
+  </button>
+  <div class="dd-sep"></div>
+  <button class="dd-item danger" onclick="clearAll()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+    Clear all detached
+  </button>
 </div>
-<div class="search-hint" id="search-hint">Tekan Enter untuk menambah package yang belum ada di daftar.</div>
 
-<div class="pkg-list" id="pkg-list">
-  <div class="loading">Memuat daftar aplikasi…</div>
-</div>
-
-<div class="actions">
-  <button class="action-btn" onclick="restartPlayStore()">🔄 &nbsp;Restart Play Store</button>
-  <button class="action-btn" onclick="viewLog()">📄 &nbsp;Lihat log</button>
-  <button class="action-btn danger" onclick="clearAll()">🗑️ &nbsp;Kosongkan daftar</button>
-</div>
-
+<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <script>
-const DETACH_DIR = "/data/adb/detach";
-const LIST_FILE  = DETACH_DIR + "/detach.list";
-const PLAY_STORE = "com.android.vending";
+'use strict';
 
-let currentTab = "detached";
-let detachedSet = new Set();
-let userPackages = [];
-let systemPackages = [];
-let bridgeAvailable = true;
+const DETACH_DIR = '/data/adb/detach';
+const LIST_FILE  = DETACH_DIR + '/detach.list';
+const PLAY_STORE = 'com.android.vending';
 
-// ---------- Bridge KernelSU / APatch / Magisk ----------
+let currentTab    = 'detached';
+let detachedSet   = new Set();
+let userPkgs      = [];
+let systemPkgs    = [];
+let bridgeOK      = true;
+let searchTimer   = null;
+let dropdownOpen  = false;
+
+/* ── Bridge ── */
 async function exec(cmd) {
-  if (window.ksu && typeof ksu.exec === "function") {
+  if (window.ksu?.exec) {
     try { return await ksu.exec(cmd); }
-    catch (e) { return { errno: -1, stdout: "", stderr: String(e) }; }
+    catch(e) { return { errno:-1, stdout:'', stderr:String(e) }; }
   }
-  bridgeAvailable = false;
-  return { errno: -2, stdout: "", stderr: "no bridge" };
+  bridgeOK = false;
+  return { errno:-2, stdout:'', stderr:'no bridge' };
 }
 
-function toast(msg) {
-  if (window.ksu && typeof ksu.toast === "function") { ksu.toast(msg); return; }
-  const el = document.getElementById("toast");
+function showToast(msg, dur = 2000) {
+  if (window.ksu?.toast) { ksu.toast(msg); return; }
+  const el = document.getElementById('toast');
   el.textContent = msg;
-  el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 2200);
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), dur);
 }
 
-// ---------- Data loading ----------
+/* ── Data loading ── */
 async function loadDetached() {
-  const res = await exec(`cat ${LIST_FILE} 2>/dev/null`);
+  const r = await exec(`cat ${LIST_FILE} 2>/dev/null`);
   detachedSet = new Set(
-    (res.stdout || "").split("\n").map(l => l.trim())
-      .filter(l => l && !l.startsWith("#"))
+    (r.stdout || '').split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#'))
   );
 }
 
-// Ambil SEMUA package (user + system) supaya pencarian bisa menemukan
-// aplikasi apa pun, termasuk app bawaan/system yang sebelumnya tidak
-// pernah muncul karena hanya "-3" (user apps) yang dibaca.
 async function loadPackages() {
-  const [userRes, sysRes] = await Promise.all([
-    exec("pm list packages -3 2>/dev/null"),
-    exec("pm list packages -s 2>/dev/null"),
+  // Run both in parallel, retry with -e flag if first attempt returns nothing
+  const [uRes, sRes] = await Promise.all([
+    exec('pm list packages -3 2>/dev/null'),
+    exec('pm list packages -s 2>/dev/null'),
   ]);
-  userPackages = (userRes.stdout || "").split("\n")
-    .map(l => l.replace("package:", "").trim()).filter(Boolean);
-  systemPackages = (sysRes.stdout || "").split("\n")
-    .map(l => l.replace("package:", "").trim()).filter(Boolean);
+
+  const parse = out => (out || '').split('\n')
+    .map(l => l.replace(/^package:/, '').trim())
+    .filter(Boolean);
+
+  userPkgs   = parse(uRes.stdout);
+  systemPkgs = parse(sRes.stdout);
+
+  // Fallback: dump all packages if both are empty (some ROMs need -e or no flag)
+  if (!userPkgs.length && !systemPkgs.length) {
+    const allRes = await exec('pm list packages 2>/dev/null');
+    const all = parse(allRes.stdout);
+    // heuristic: system if path contains /system or not user-installed
+    userPkgs   = all;
+    systemPkgs = [];
+  }
 }
 
 async function loadStatus() {
-  const res = await exec(
-    "getprop ro.build.version.release; echo ---; " +
-    "getprop ro.build.version.sdk; echo ---; " +
-    "getprop ro.mi.os.version.name; getprop ro.miui.ui.version.name");
-  const p = (res.stdout || "").split("---").map(s => s.trim());
-  document.getElementById("stat-android").textContent =
-    (p[0] || "?") + " · SDK " + (p[1] || "?");
-  const skin = p[2] || p[3] || "";
-  document.getElementById("subtitle").textContent =
-    skin ? "miui/hyperos (" + skin + ")" : "Universal · Android 7–17+";
+  const r = await exec(
+    'echo SDK:$(getprop ro.build.version.sdk);' +
+    'echo REL:$(getprop ro.build.version.release);' +
+    'echo SKIN:$(getprop ro.mi.os.version.name || getprop ro.miui.ui.version.name || getprop ro.build.version.oneui || echo)'
+  );
+  const lines = {};
+  (r.stdout || '').split('\n').forEach(l => {
+    const [k,...v] = l.split(':');
+    if (k) lines[k] = v.join(':').trim();
+  });
 
-  if (!bridgeAvailable) {
-    document.getElementById("bridge-banner").classList.add("show");
+  const sdk = lines.SDK || '';
+  const rel = lines.REL || '';
+  const skin = lines.SKIN || '';
+
+  document.getElementById('stat-android').textContent = rel ? `${rel}` : '–';
+  document.getElementById('subtitle').textContent =
+    sdk ? `Android ${rel}  ·  SDK ${sdk}${skin ? '  ·  ' + skin : ''}` : 'Universal · Android 7–17+';
+
+  if (!bridgeOK) {
+    document.getElementById('bridge-banner').classList.add('show');
   }
 }
 
-// ---------- Render ----------
-function currentSourceList() {
-  if (currentTab === "detached") return [...detachedSet];
-  if (currentTab === "user") return userPackages;
-  return systemPackages;
+/* ── Render ── */
+function getSourceList() {
+  if (currentTab === 'detached') return [...detachedSet];
+  if (currentTab === 'user')     return userPkgs;
+  return systemPkgs;
 }
 
-function refresh() {
-  document.getElementById("stat-count").textContent = detachedSet.size;
-  const q = document.getElementById("search").value.trim().toLowerCase();
-  document.getElementById("search-clear").classList.toggle("show", q.length > 0);
-  document.getElementById("search-hint").classList.toggle("show", currentTab !== "detached" && q.length > 0);
+function render() {
+  const count = detachedSet.size;
+  document.getElementById('stat-count').textContent  = count;
+  document.getElementById('badge-count').textContent = count;
 
-  const el = document.getElementById("pkg-list");
-  el.innerHTML = "";
+  const q = (document.getElementById('search').value || '').trim().toLowerCase();
+  const showClear = q.length > 0;
+  document.getElementById('search-clear').classList.toggle('show', showClear);
+  document.getElementById('search-hint').classList.toggle(
+    'show', q.length > 0 && currentTab !== 'detached'
+  );
 
-  const items = currentSourceList()
-    .filter(p => p.toLowerCase().includes(q))
-    .sort();
+  const listEl = document.getElementById('pkg-list');
+  listEl.innerHTML = '';
 
-  if (!items.length) {
-    let msg;
-    if (currentTab === "detached") {
-      msg = "Belum ada aplikasi yang diputus.<br>Cari di tab \"App Terpasang\" / \"App Sistem\" lalu ketuk Putus.";
-    } else if (!bridgeAvailable) {
-      msg = "Tidak bisa membaca daftar aplikasi.<br>Buka WebUI ini dari manager KernelSU/APatch/Magisk.";
+  const src = getSourceList();
+  const filtered = q ? src.filter(p => p.toLowerCase().includes(q)) : src;
+  const sorted = [...filtered].sort();
+
+  if (!sorted.length) {
+    let msg, sub = '';
+    if (currentTab === 'detached') {
+      msg = 'No detached packages';
+      sub = 'Use User Apps or System Apps tabs to find and detach.';
+    } else if (!bridgeOK) {
+      msg = 'Cannot read package list';
+      sub = 'Open this WebUI from KernelSU / APatch / Magisk manager.\nYou can still type a package name in the search bar and press Enter.';
+    } else if (q) {
+      msg = `No results for "${q}"`;
+      sub = currentTab !== 'detached' ? 'Press Enter to detach this package name directly.' : '';
     } else {
-      msg = "Tidak ada aplikasi yang cocok dengan pencarian.";
+      msg = 'No packages found';
+      sub = 'Tap "Reload packages" from the More menu.';
     }
-    el.innerHTML = `<div class="empty-state"><span class="big">📭</span>${msg}</div>`;
+    listEl.innerHTML = `<div class="state-box"><span class="icon">${currentTab === 'detached' ? '🛡️' : '📦'}</span><p>${msg}</p><small>${sub.replace(/\n/g,'<br>')}</small></div>`;
     return;
   }
 
-  for (const pkg of items) el.appendChild(makeItem(pkg));
+  const frag = document.createDocumentFragment();
+
+  // Group: detached first within user/system tabs
+  if (currentTab !== 'detached') {
+    const det = sorted.filter(p => detachedSet.has(p));
+    const att = sorted.filter(p => !detachedSet.has(p));
+
+    if (det.length) {
+      const lbl = document.createElement('div');
+      lbl.className = 'section-label';
+      lbl.textContent = `Detached (${det.length})`;
+      frag.appendChild(lbl);
+      det.forEach(p => frag.appendChild(makeItem(p)));
+      const div = document.createElement('div');
+      div.className = 'divider';
+      frag.appendChild(div);
+    }
+    att.forEach(p => frag.appendChild(makeItem(p)));
+  } else {
+    sorted.forEach(p => frag.appendChild(makeItem(p)));
+  }
+
+  listEl.appendChild(frag);
 }
 
 function makeItem(pkg) {
   const isDetached = detachedSet.has(pkg);
-  const isSystem = systemPackages.includes(pkg);
-  const div = document.createElement("div");
-  div.className = "pkg-item";
+  const isSystem   = systemPkgs.includes(pkg);
 
-  const main = document.createElement("div");
-  main.className = "pkg-main";
-  main.innerHTML = `<div class="pkg-name">${pkg}</div>` +
-    (isDetached ? `<div class="pkg-tag">● Terputus</div>` :
-     isSystem ? `<div class="pkg-tag system">Aplikasi sistem</div>` : "");
-  div.appendChild(main);
+  const row = document.createElement('div');
+  row.className = 'pkg-item' + (isDetached ? ' is-detached' : '');
 
-  const btn = document.createElement("button");
-  btn.className = "chip " + (isDetached ? "chip-remove" : "chip-add");
-  btn.textContent = isDetached ? "Lepas" : "Putus";
-  btn.onclick = () => isDetached ? removePkg(pkg) : addPkg(pkg);
-  div.appendChild(btn);
+  const main = document.createElement('div');
+  main.className = 'pkg-main';
 
-  return div;
+  const name = document.createElement('div');
+  name.className = 'pkg-name';
+  name.textContent = pkg;
+  main.appendChild(name);
+
+  const status = document.createElement('div');
+  status.className = 'pkg-status' + (isDetached ? ' detached' : '');
+  status.textContent = isDetached
+    ? 'Detached — ignored by Play Store'
+    : (isSystem ? 'System app — receives normal updates' : 'Attached — receives normal updates');
+  main.appendChild(status);
+
+  row.appendChild(main);
+
+  // Toggle switch
+  const label = document.createElement('label');
+  label.className = 'toggle';
+  label.setAttribute('aria-label', isDetached ? 'Remove from detach' : 'Detach');
+
+  const inp = document.createElement('input');
+  inp.type = 'checkbox';
+  inp.checked = isDetached;
+  inp.addEventListener('change', () => {
+    inp.disabled = true;
+    (isDetached ? removePkg(pkg) : addPkg(pkg)).finally(() => { inp.disabled = false; });
+  });
+
+  const track = document.createElement('div');
+  track.className = 'toggle-track';
+  const thumb = document.createElement('div');
+  thumb.className = 'toggle-thumb';
+
+  label.appendChild(inp);
+  label.appendChild(track);
+  label.appendChild(thumb);
+  row.appendChild(label);
+
+  return row;
 }
 
-// ---------- Actions ----------
+/* ── Actions ── */
 function isValidPkg(pkg) {
-  return /^[a-zA-Z0-9._]+$/.test(pkg);
+  return /^[a-zA-Z][a-zA-Z0-9._]{1,}$/.test(pkg);
 }
 
 async function addPkg(pkg) {
-  if (!isValidPkg(pkg)) { toast("Nama package tidak valid"); return; }
-  if (detachedSet.has(pkg)) { toast(pkg + " sudah ada di daftar"); return; }
-  await exec(`mkdir -p ${DETACH_DIR} && echo "${pkg}" >> ${LIST_FILE}`);
+  if (!isValidPkg(pkg)) { showToast('Invalid package name'); return; }
+  if (detachedSet.has(pkg)) { showToast(`${pkg} already detached`); return; }
+  await exec(`mkdir -p ${DETACH_DIR} && printf '%s\\n' '${pkg}' >> ${LIST_FILE}`);
   await loadDetached();
-  await restartPlayStore(false);
-  toast("✓ " + pkg + " diputus");
-  refresh();
+  await exec(`am force-stop ${PLAY_STORE} 2>/dev/null`);
+  showToast(`✓ Detached: ${pkg}`);
+  render();
 }
 
 async function removePkg(pkg) {
-  await exec(`sed -i '/^${pkg}$/d' ${LIST_FILE}`);
+  await exec(`sed -i '/^${pkg.replace('.','\\.')}$/d' ${LIST_FILE}`);
   await loadDetached();
-  await restartPlayStore(false);
-  toast("✓ " + pkg + " dilepas");
-  refresh();
+  await exec(`am force-stop ${PLAY_STORE} 2>/dev/null`);
+  showToast(`Attached: ${pkg}`);
+  render();
 }
 
-async function restartPlayStore(show = true) {
+async function restartPlayStore() {
   await exec(`am force-stop ${PLAY_STORE}`);
-  if (show) toast("Play Store di-restart");
+  showToast('Play Store restarted');
 }
 
 async function clearAll() {
-  if (!confirm("Kosongkan seluruh daftar detach?")) return;
-  await exec(`echo -n "" > ${LIST_FILE}`);
+  closeDropdown();
+  if (!confirm('Remove all detached packages?')) return;
+  await exec(`printf '' > ${LIST_FILE}`);
   await loadDetached();
-  await restartPlayStore(false);
-  toast("Daftar dikosongkan");
-  refresh();
+  await exec(`am force-stop ${PLAY_STORE} 2>/dev/null`);
+  showToast('Cleared all detached packages');
+  render();
 }
 
 async function viewLog() {
-  const res = await exec(`tail -50 ${DETACH_DIR}/detach.log 2>/dev/null`);
-  alert("=== detach.log (50 baris terakhir) ===\n\n" + (res.stdout || "(log kosong)"));
+  closeDropdown();
+  const r = await exec(`tail -60 ${DETACH_DIR}/detach.log 2>/dev/null`);
+  alert('=== detach.log (last 60 lines) ===\n\n' + (r.stdout?.trim() || '(log empty)'));
 }
 
-function clearSearch() {
-  const s = document.getElementById("search");
-  s.value = "";
-  s.focus();
-  refresh();
+async function reloadPackages() {
+  closeDropdown();
+  document.getElementById('pkg-list').innerHTML = '<div class="skeleton"><div class="skel-item"></div><div class="skel-item"></div><div class="skel-item"></div></div>';
+  await loadPackages();
+  render();
+  showToast('Package list reloaded');
 }
 
-// ---------- UI events ----------
+/* ── Dropdown ── */
+function toggleDropdown() {
+  dropdownOpen ? closeDropdown() : openDropdown();
+}
+
+function openDropdown() {
+  const btn = document.querySelector('.btn-primary');
+  const rect = btn.getBoundingClientRect();
+  const dd = document.getElementById('dropdown');
+  dd.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+  dd.style.right = '20px';
+  dd.classList.add('show');
+  document.getElementById('overlay').classList.add('show');
+  dropdownOpen = true;
+}
+
+function closeDropdown() {
+  document.getElementById('dropdown').classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+  dropdownOpen = false;
+}
+
+/* ── Tab switching ── */
 function switchTab(tab) {
   currentTab = tab;
-  document.getElementById("tab-detached").classList.toggle("active", tab === "detached");
-  document.getElementById("tab-user").classList.toggle("active", tab === "user");
-  document.getElementById("tab-system").classList.toggle("active", tab === "system");
-  refresh();
+  ['detached','user','system'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+  });
+  document.getElementById('search-hint').classList.toggle('show',
+    document.getElementById('search').value.trim().length > 0 && tab !== 'detached'
+  );
+  render();
 }
 
-document.getElementById("search").addEventListener("keydown", async (e) => {
-  if (e.key !== "Enter") return;
-  const val = e.target.value.trim();
+/* ── Search ── */
+const searchEl = document.getElementById('search');
+searchEl.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(render, 80);
+});
+
+searchEl.addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const val = searchEl.value.trim();
   if (val && isValidPkg(val) && !detachedSet.has(val)) {
     await addPkg(val);
-    e.target.value = "";
+    searchEl.value = '';
+    render();
   }
 });
-document.getElementById("search").addEventListener("input", refresh);
 
-// ---------- Init ----------
-(async function init() {
+document.getElementById('search-clear').addEventListener('click', () => {
+  searchEl.value = '';
+  searchEl.focus();
+  render();
+});
+
+/* ── Init ── */
+(async () => {
   await loadStatus();
-  await loadDetached();
-  await loadPackages();
-  refresh();
+  await Promise.all([loadDetached(), loadPackages()]);
+  render();
 })();
 </script>
 </body>
