@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Detach Manager v2</title>
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--card-hover:#222635;--accent:#7c6cf0;
+--green:#4ade80;--red:#f87171;--text:#e2e8f0;--dim:#64748b;--border:#2a2f3e}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);
+color:var(--text);padding:16px;padding-bottom:80px;max-width:600px;margin:0 auto}
+.header{text-align:center;padding:20px 0 16px}
+.header h1{font-size:1.4rem;font-weight:700}
+.header p{color:var(--dim);font-size:.8rem;margin-top:4px}
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.status-card{background:var(--card);border-radius:12px;padding:14px;border:1px solid var(--border)}
+.status-card .label{font-size:.7rem;color:var(--dim);text-transform:uppercase}
+.status-card .value{font-size:1rem;font-weight:600;margin-top:4px}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tab{flex:1;padding:10px;text-align:center;background:var(--card);border:1px solid var(--border);
+border-radius:10px;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .15s}
+.tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.search-box{width:100%;padding:12px 14px;background:var(--card);border:1px solid var(--border);
+border-radius:10px;color:var(--text);font-size:.9rem;margin-bottom:12px;outline:none}
+.search-box:focus{border-color:var(--accent)}
+.pkg-list{display:flex;flex-direction:column;gap:8px}
+.pkg-item{display:flex;align-items:center;justify-content:space-between;background:var(--card);
+border:1px solid var(--border);border-radius:10px;padding:12px 14px;transition:background .15s}
+.pkg-item:active{background:var(--card-hover)}
+.pkg-name{font-size:.85rem;word-break:break-all}
+.pkg-name small{display:block;color:var(--dim);font-size:.7rem;margin-top:2px}
+.btn{border:none;border-radius:8px;padding:8px 14px;font-size:.8rem;font-weight:600;cursor:pointer}
+.btn-remove{background:rgba(248,113,113,.15);color:var(--red)}
+.btn-add{background:rgba(74,222,128,.15);color:var(--green)}
+.actions{margin-top:20px;display:flex;flex-direction:column;gap:10px}
+.action-btn{width:100%;padding:14px;background:var(--card);border:1px solid var(--border);
+border-radius:12px;color:var(--text);font-size:.9rem;font-weight:500;cursor:pointer}
+.action-btn:active{background:var(--card-hover)}
+.action-btn.danger{color:var(--red);border-color:rgba(248,113,113,.3)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--dim);font-size:.85rem}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);
+color:#fff;padding:10px 20px;border-radius:20px;font-size:.8rem;opacity:0;transition:opacity .3s;
+pointer-events:none;z-index:100}
+.toast.show{opacity:1}
+.loading{text-align:center;padding:30px;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🚫 Detach Manager v2</h1>
+    <p id="subtitle">memuat...</p>
+</div>
+
+<div class="status-grid">
+    <div class="status-card">
+        <div class="label">Terputus dari Play Store</div>
+        <div class="value" id="stat-count">-</div>
+    </div>
+    <div class="status-card">
+        <div class="label">Android</div>
+        <div class="value" id="stat-android">-</div>
+    </div>
+</div>
+
+<div class="tabs">
+    <div class="tab active" id="tab-detached" onclick="switchTab('detached')">Terputus</div>
+    <div class="tab" id="tab-installed" onclick="switchTab('installed')">Semua App</div>
+</div>
+
+<input class="search-box" id="search" type="text"
+       placeholder="🔍 Cari / tambah package (mis. com.spotify.music)">
+
+<div class="pkg-list" id="pkg-list">
+    <div class="loading">Memuat daftar...</div>
+</div>
+
+<div class="actions">
+    <button class="action-btn" onclick="restartPlayStore()">🔄 Restart Play Store</button>
+    <button class="action-btn" onclick="viewLog()">📄 Lihat Log</button>
+    <button class="action-btn danger" onclick="clearAll()">🗑️ Kosongkan Daftar</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const DETACH_DIR = "/data/adb/detach";
+const LIST_FILE  = DETACH_DIR + "/detach.list";
+const PLAY_STORE = "com.android.vending";
+
+let currentTab = "detached";
+let detachedSet = new Set();
+let allPackages = [];
+
+// ---------- Bridge KernelSU / APatch ----------
+async function exec(cmd) {
+    if (window.ksu && typeof ksu.exec === "function") {
+        try { return await ksu.exec(cmd); }
+        catch (e) { return { errno: -1, stdout: "", stderr: String(e) }; }
+    }
+    return { errno: -2, stdout: "",
+             stderr: "WebUI bridge tidak tersedia — buka dari KernelSU/APatch Manager" };
+}
+
+function toast(msg) {
+    if (window.ksu && typeof ksu.toast === "function") { ksu.toast(msg); return; }
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 2500);
+}
+
+// ---------- Data ----------
+async function loadDetached() {
+    const res = await exec(`cat ${LIST_FILE} 2>/dev/null`);
+    detachedSet = new Set(
+        (res.stdout || "").split("\n").map(l => l.trim())
+            .filter(l => l && !l.startsWith("#"))
+    );
+}
+
+async function loadInstalled() {
+    const res = await exec("pm list packages -3 2>/dev/null");
+    allPackages = (res.stdout || "").split("\n")
+        .map(l => l.replace("package:", "").trim()).filter(l => l);
+}
+
+async function loadStatus() {
+    const res = await exec(
+        "getprop ro.build.version.release; echo ---; " +
+        "getprop ro.build.version.sdk; echo ---; " +
+        "getprop ro.mi.os.version.name; getprop ro.miui.ui.version.name");
+    const p = (res.stdout || "").split("---").map(s => s.trim());
+    document.getElementById("stat-android").textContent =
+        (p[0] || "?") + " (SDK " + (p[1] || "?") + ")";
+    const skin = p[2] || p[3] || "";
+    document.getElementById("subtitle").textContent =
+        skin ? "Device: miui/hyperos (" + skin + ")" : "Universal · Android 7–17+";
+}
+
+// ---------- Render ----------
+async function refresh() {
+    document.getElementById("stat-count").textContent = detachedSet.size;
+    const q = document.getElementById("search").value.trim().toLowerCase();
+    const el = document.getElementById("pkg-list");
+    el.innerHTML = "";
+
+    let items;
+    if (currentTab === "detached") {
+        items = [...detachedSet].filter(p => p.toLowerCase().includes(q)).sort();
+        if (!items.length) {
+            el.innerHTML = `<div class="empty-state">Daftar kosong.<br>
+                Tambah package lewat kolom pencarian,<br>atau buka tab "Semua App".</div>`;
+            return;
+        }
+    } else {
+        items = allPackages.filter(p => p.toLowerCase().includes(q)).sort();
+        if (!items.length) {
+            el.innerHTML = `<div class="empty-state">Tidak ada app yang cocok.</div>`;
+            return;
+        }
+    }
+    for (const pkg of items) el.appendChild(makeItem(pkg, detachedSet.has(pkg)));
+}
+
+function makeItem(pkg, isDetached) {
+    const div = document.createElement("div");
+    div.className = "pkg-item";
+    div.innerHTML = `<div class="pkg-name">${pkg}` +
+        (isDetached ? `<small style="color:var(--green)">✓ terputus</small>` : "") + `</div>`;
+    const btn = document.createElement("button");
+    btn.className = "btn " + (isDetached ? "btn-remove" : "btn-add");
+    btn.textContent = isDetached ? "Lepas" : "Putus";
+    btn.onclick = () => isDetached ? removePkg(pkg) : addPkg(pkg);
+    div.appendChild(btn);
+    return div;
+}
+
+// ---------- Actions ----------
+async function addPkg(pkg) {
+    if (!/^[a-zA-Z0-9._]+$/.test(pkg)) { toast("Nama package tidak valid"); return; }
+    await exec(`mkdir -p ${DETACH_DIR} && echo "${pkg}" >> ${LIST_FILE}`);
+    await loadDetached();
+    await restartPlayStore(false);
+    toast("✓ " + pkg + " diputus");
+    refresh();
+}
+
+async function removePkg(pkg) {
+    await exec(`sed -i '/^${pkg}$/d' ${LIST_FILE}`);
+    await loadDetached();
+    await restartPlayStore(false);
+    toast("✓ " + pkg + " dilepas");
+    refresh();
+}
+
+async function restartPlayStore(show = true) {
+    await exec(`am force-stop ${PLAY_STORE}`);
+    if (show) toast("Play Store di-restart");
+}
+
+async function clearAll() {
+    if (!confirm("Kosongkan seluruh daftar detach?")) return;
+    await exec(`echo -n "" > ${LIST_FILE}`);
+    await loadDetached();
+    await restartPlayStore(false);
+    toast("Daftar dikosongkan");
+    refresh();
+}
+
+async function viewLog() {
+    const res = await exec(`tail -50 ${DETACH_DIR}/detach.log 2>/dev/null`);
+    alert("=== detach.log (50 baris terakhir) ===\n\n" + (res.stdout || "(log kosong)"));
+}
+
+// ---------- UI Events ----------
+function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById("tab-detached").classList.toggle("active", tab === "detached");
+    document.getElementById("tab-installed").classList.toggle("active", tab === "installed");
+    refresh();
+}
+
+document.getElementById("search").addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") {
+        const val = e.target.value.trim();
+        if (val && !detachedSet.has(val) && /^[a-zA-Z0-9._]+$/.test(val)) {
+            await addPkg(val);
+            e.target.value = "";
+        }
+    }
+});
+document.getElementById("search").addEventListener("input", refresh);
+
+// ---------- Init ----------
+(async function init() {
+    await loadStatus();
+    await loadDetached();
+    await loadInstalled();
+    refresh();
+})();
+</script>
+</body>
+</html>
