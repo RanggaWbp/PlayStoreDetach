@@ -177,13 +177,18 @@ jobs:
           done
           echo "All 4 architectures built successfully"
 
-      - name: Package module (files at zip ROOT)
+          - name: Package module (files at zip ROOT)
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           DATE="${{ needs.prepare.outputs.date }}"
           ZIP="PlayStoreDetach-v${VERSION}-${DATE}.zip"
 
+          # ========================================================
+          # FIX: pastikan folder output ada SEBELUM cd ke sana
+          # ========================================================
+          mkdir -p output
           cd output
+
           rm -rf PlayStoreDetach "$ZIP" "${ZIP}.sha256"
           mkdir -p PlayStoreDetach/zygisk/{arm64-v8a,armeabi-v7a,x86_64,x86}
           mkdir -p PlayStoreDetach/META-INF/com/google/android
@@ -197,7 +202,7 @@ jobs:
           cp ../build/x86_64/libzygisk-detach.so       PlayStoreDetach/zygisk/x86_64/
           cp ../build/x86/libzygisk-detach.so          PlayStoreDetach/zygisk/x86/
 
-          # Generate recovery installer files (inline, no extra files needed)
+          # Generate recovery installer files (inline)
           echo "#MAGISK" > PlayStoreDetach/META-INF/com/google/android/updater-script
 
           cat > PlayStoreDetach/META-INF/com/google/android/update-binary <<'BINARY_EOF'
@@ -224,23 +229,21 @@ jobs:
           chmod 0755 PlayStoreDetach/*.sh 2>/dev/null || true
           chmod 0755 PlayStoreDetach/META-INF/com/google/android/update-binary
 
-          # ================================================
-          # KEY FIX: zip from INSIDE the folder using "."
-          # This puts module.prop at the ROOT of the zip,
-          # which is what Magisk/KernelSU expects.
-          # ================================================
+          # ========================================================
+          # KEY: zip dari DALAM folder pakai "."
+          # → module.prop berada di ROOT zip (yang diminta KSU/Magisk)
+          # ========================================================
           cd PlayStoreDetach
           zip -r9 "../$ZIP" .
           cd ..
 
           sha256sum "$ZIP" > "${ZIP}.sha256"
 
-          # Verify structure - module.prop MUST appear without folder prefix
-          echo "================ ZIP STRUCTURE (must be correct) ================"
+          # Verifikasi struktur
+          echo "================ ZIP STRUCTURE ================"
           unzip -l "$ZIP"
-          echo "=================================================================="
+          echo "================================================"
 
-          # Hard fail if structure is wrong
           if ! unzip -l "$ZIP" | grep -q " module.prop$"; then
             echo "::error::module.prop not found at zip root! Packaging failed."
             exit 1
