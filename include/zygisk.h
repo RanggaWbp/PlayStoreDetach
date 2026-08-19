@@ -77,7 +77,18 @@ protected:
 
 namespace internal {
 
-struct api_table;
+struct api_table {
+    void *impl;
+    bool (*registerModule)(api_table *, long *);
+    void (*hookJniNativeMethods)(const char *, JNINativeMethod *, int);
+    void (*pltHookRegister)(const char *, const char *, void *, void **);
+    void (*pltHookExclude)(const char *);
+    bool (*pltHookCommit)();
+    void (*connectCompanion)(void *, int);
+    void (*setOption)(void *, Option);
+    int (*getModuleDir)(void *);
+    uint32_t (*getFlags)(void *);
+};
 
 // Struktur ABI yang diserahkan ke framework Zygisk saat registrasi
 struct module_abi {
@@ -107,35 +118,6 @@ void postServerThunk(ModuleBase *base, const ServerSpecializeArgs *args) {
     static_cast<T *>(base)->postServerSpecialize(args);
 }
 
-template<class T>
-void register_module(api_table *table, JNIEnv *env) {
-    static T module;
-    static module_abi abi {
-        ZYGISK_API_VERSION,
-        &module,
-        &preAppThunk<T>,
-        &postAppThunk<T>,
-        &preServerThunk<T>,
-        &postServerThunk<T>
-    };
-    Api api{table};
-    module.onLoad(&api, env);
-    table->registerModule(table, reinterpret_cast<long *>(&abi));
-}
-
-struct api_table {
-    void *impl;
-    bool (*registerModule)(api_table *, long *);
-    void (*hookJniNativeMethods)(const char *, JNINativeMethod *, int);
-    void (*pltHookRegister)(const char *, const char *, void *, void **);
-    void (*pltHookExclude)(const char *);
-    bool (*pltHookCommit)();
-    void (*connectCompanion)(void *, int);
-    void (*setOption)(void *, Option);
-    int (*getModuleDir)(void *);
-    uint32_t (*getFlags)(void *);
-};
-
 } // namespace internal
 
 struct Api {
@@ -158,6 +140,26 @@ struct Api {
     void pltHookExclude(const char *regex) { impl->pltHookExclude(regex); }
     bool pltHookCommit() { return impl->pltHookCommit(); }
 };
+
+namespace internal {
+
+template<class T>
+void register_module(api_table *table, JNIEnv *env) {
+    static T module;
+    static module_abi abi {
+        ZYGISK_API_VERSION,
+        &module,
+        &preAppThunk<T>,
+        &postAppThunk<T>,
+        &preServerThunk<T>,
+        &postServerThunk<T>
+    };
+    Api api{table};
+    module.onLoad(&api, env);
+    table->registerModule(table, reinterpret_cast<long *>(&abi));
+}
+
+} // namespace internal
 
 } // namespace zygisk
 
