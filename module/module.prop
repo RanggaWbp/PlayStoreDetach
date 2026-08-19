@@ -4,3 +4,12 @@ version=v1.0
 versionCode=100
 author=RanggaWbp
 description=Universal Play Store Detach - Android 7-17+ | miui/hyperos, OneUI, ColorOS, dll | KernelSU WebUI included
+updateJson=https://github.com/USERNAME/REPO-KAMU/releases/latest/download/update.json
+
+id=playstoredetach
+name=PlayStoreDetach
+version=v2.1.0
+versionCode=20100
+author=Team1000 Professors
+description=Universal Play Store Detach — Android 7-17+ | miui/hyperos & semua OEM | WebUI KernelSU
+updateJson=https://github.com/RanggaWbp/PlayStoreDetach/releases/latest/download/update.json
