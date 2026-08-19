@@ -1,8 +1,7 @@
-id=PlayStoreDetach
-name=PlayStoreDetach - Universal
-version=v1.0.0
+id=PlaystoreDetach
+name=PlaystoreDetach - Universal
+version=v1.0
 versionCode=10000
 author=RanggaWbp
 description=Universal Play Store Detach - Android 7-17+ | miui/hyperos, OneUI, ColorOS, dll | KernelSU WebUI included
 https://github.com/RanggaWbp/PlayStoreDetach/releases/latest/download/update.json
-
