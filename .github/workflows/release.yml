@@ -1,4 +1,4 @@
-name: Release PlayStoreDetach
+name: Release PlaystoreDetach
 
 on:
   push:
@@ -37,30 +37,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract version and date
+      - name: Auto-detect version (no manual edit needed)
         id: ver
         run: |
-          SOURCE="module.prop"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            RAW="${GITHUB_REF#refs/tags/v}"
-            SOURCE="git tag"
-          else
-            RAW=$(grep '^version=' module/module.prop | head -1 | \
-                  cut -d'=' -f2 | tr -d '\r' | sed 's/^[vV]//' | sed 's/[[:space:]]//g')
-          fi
+          # MAJOR.MINOR hanya diambil dari module.prop (edit manual cuma perlu
+          # kalau memang mau naik versi besar/fitur baru). PATCH dihitung
+          # otomatis dari jumlah tag rilis yang sudah ada untuk MAJOR.MINOR
+          # tsb, jadi module.prop TIDAK PERNAH perlu diubah manual per rilis.
+          RAW=$(grep '^version=' module/module.prop | head -1 | \
+                cut -d'=' -f2 | tr -d '\r' | sed 's/^[vV]//' | sed 's/[[:space:]]//g')
 
-          echo "Raw version from $SOURCE: '$RAW'"
-
-          if ! [[ "$RAW" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
-            echo "::error::Invalid version '$RAW'. Expected: x, x.y, or x.y.z (e.g. 1.0.0)"
+          if ! [[ "$RAW" =~ ^[0-9]+\.[0-9]+ ]]; then
+            echo "::error::Invalid version '$RAW' in module.prop. Expected: x.y or x.y.z"
             exit 1
           fi
 
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$RAW"
-          MAJOR=${MAJOR:-0}
-          MINOR=${MINOR:-0}
-          PATCH=${PATCH:-0}
-          VERSION="$MAJOR.$MINOR.$PATCH"
+          MAJOR=$(echo "$RAW" | cut -d'.' -f1)
+          MINOR=$(echo "$RAW" | cut -d'.' -f2)
+
+          git fetch --tags --quiet
+          EXISTING=$(git tag -l "v${MAJOR}.${MINOR}.*" | wc -l)
+
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            # Manual tag push -> pakai apa adanya, jangan auto-increment lagi
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          else
+            PATCH=$EXISTING
+            VERSION="$MAJOR.$MINOR.$PATCH"
+          fi
 
           VC=$((MAJOR*10000 + MINOR*100 + PATCH))
           DATE=$(TZ='Asia/Jakarta' date +'%d-%m-%Y')
@@ -69,7 +74,7 @@ jobs:
           echo "version_code=$VC" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
 
-          echo "Version     : v$VERSION (versionCode: $VC)"
+          echo "Version     : v$VERSION (versionCode: $VC) [auto patch: $PATCH]"
           echo "Release date: $DATE"
 
       - name: Check tag and release (prevent duplicates)
@@ -170,28 +175,28 @@ jobs:
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           DATE="${{ needs.prepare.outputs.date }}"
-          ZIP="PlayStoreDetach-v${VERSION}-${DATE}.zip"
+          ZIP="PlaystoreDetach-v${VERSION}-${DATE}.zip"
 
           mkdir -p output
           cd output
 
-          rm -rf PlayStoreDetach "$ZIP" "${ZIP}.sha256"
-          mkdir -p PlayStoreDetach/zygisk/arm64-v8a
-          mkdir -p PlayStoreDetach/zygisk/armeabi-v7a
-          mkdir -p PlayStoreDetach/zygisk/x86_64
-          mkdir -p PlayStoreDetach/zygisk/x86
-          mkdir -p PlayStoreDetach/META-INF/com/google/android
+          rm -rf PlaystoreDetach "$ZIP" "${ZIP}.sha256"
+          mkdir -p PlaystoreDetach/zygisk/arm64-v8a
+          mkdir -p PlaystoreDetach/zygisk/armeabi-v7a
+          mkdir -p PlaystoreDetach/zygisk/x86_64
+          mkdir -p PlaystoreDetach/zygisk/x86
+          mkdir -p PlaystoreDetach/META-INF/com/google/android
 
-          cp -r ../module/* PlayStoreDetach/
+          cp -r ../module/* PlaystoreDetach/
 
-          cp ../build/arm64-v8a/libzygisk-detach.so    PlayStoreDetach/zygisk/arm64-v8a/
-          cp ../build/armeabi-v7a/libzygisk-detach.so  PlayStoreDetach/zygisk/armeabi-v7a/
-          cp ../build/x86_64/libzygisk-detach.so       PlayStoreDetach/zygisk/x86_64/
-          cp ../build/x86/libzygisk-detach.so          PlayStoreDetach/zygisk/x86/
+          cp ../build/arm64-v8a/libzygisk-detach.so    PlaystoreDetach/zygisk/arm64-v8a/
+          cp ../build/armeabi-v7a/libzygisk-detach.so  PlaystoreDetach/zygisk/armeabi-v7a/
+          cp ../build/x86_64/libzygisk-detach.so       PlaystoreDetach/zygisk/x86_64/
+          cp ../build/x86/libzygisk-detach.so          PlaystoreDetach/zygisk/x86/
 
-          echo "#MAGISK" > PlayStoreDetach/META-INF/com/google/android/updater-script
+          echo "#MAGISK" > PlaystoreDetach/META-INF/com/google/android/updater-script
 
-          cat > PlayStoreDetach/META-INF/com/google/android/update-binary <<'BINARY_EOF'
+          cat > PlaystoreDetach/META-INF/com/google/android/update-binary <<'BINARY_EOF'
           #!/sbin/sh
           umask 022
           ui_print() { echo "$1"; }
@@ -211,10 +216,10 @@ jobs:
           exit 0
           BINARY_EOF
 
-          chmod 0755 PlayStoreDetach/*.sh 2>/dev/null || true
-          chmod 0755 PlayStoreDetach/META-INF/com/google/android/update-binary
+          chmod 0755 PlaystoreDetach/*.sh 2>/dev/null || true
+          chmod 0755 PlaystoreDetach/META-INF/com/google/android/update-binary
 
-          cd PlayStoreDetach
+          cd PlaystoreDetach
           zip -r9 "../$ZIP" .
           cd ..
 
@@ -262,7 +267,7 @@ jobs:
           VERSION="${{ needs.prepare.outputs.version }}"
           VC="${{ needs.prepare.outputs.version_code }}"
           DATE="${{ needs.prepare.outputs.date }}"
-          ZIP="PlayStoreDetach-v${VERSION}-${DATE}.zip"
+          ZIP="PlaystoreDetach-v${VERSION}-${DATE}.zip"
           REPO="${{ github.repository }}"
 
           cat > artifact/update.json <<EOF
@@ -292,9 +297,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.prepare.outputs.version }}
-          name: PlayStoreDetach v${{ needs.prepare.outputs.version }} - ${{ needs.prepare.outputs.date }}
+          name: PlaystoreDetach v${{ needs.prepare.outputs.version }} - ${{ needs.prepare.outputs.date }}
           body: |
-            # PlayStoreDetach v${{ needs.prepare.outputs.version }}
+            # PlaystoreDetach v${{ needs.prepare.outputs.version }}
 
             **Release Date:** ${{ needs.prepare.outputs.date }}
 
@@ -318,6 +323,6 @@ jobs:
 
             > Verify file integrity with the .sha256 file
           files: |
-            artifact/PlayStoreDetach-v*
+            artifact/PlaystoreDetach-v*
             artifact/update.json
           make_latest: true
