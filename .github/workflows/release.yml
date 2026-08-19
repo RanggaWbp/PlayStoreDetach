@@ -1,35 +1,29 @@
-name: 🚀 Release PlayStoreDetach
+name: Release PlayStoreDetach
 
 on:
-  # Trigger 1: push ke main/master (deteksi versi baru di module.prop)
   push:
     branches: [main, master]
-    tags: ['v*']           # Trigger 2: push tag v* (release manual)
-  # Trigger 3: manual dari tab Actions
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       force:
-        description: 'Paksa build & release (lewati cek versi)'
+        description: 'Force build & release (skip version check)'
         type: boolean
         default: false
 
 permissions:
   contents: write
 
-# Anti double-run: antrikan jika ada release lain berjalan
 concurrency:
   group: release-playstoredetach
   cancel-in-progress: false
 
-env:
-  MODULE_NAME: PlayStoreDetach
-
 jobs:
   # ==========================================================
-  # JOB 1: Deteksi versi + keputusan release
+  # JOB 1: Detect version and decide whether to release
   # ==========================================================
   prepare:
-    name: 🔍 Deteksi Versi
+    name: Detect Version
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
@@ -43,37 +37,49 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ekstrak versi & tanggal
+      - name: Extract version and date
         id: ver
         run: |
-          # Prioritas sumber versi:
-          # 1. Tag push (refs/tags/v2.2.0)  2. module.prop
+          # Version source priority:
+          # 1. Pushed tag (refs/tags/v1.0.0)  2. module.prop
+          SOURCE="module.prop"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
+            RAW="${GITHUB_REF#refs/tags/v}"
+            SOURCE="git tag"
           else
-            VERSION=$(grep '^version=' module/module.prop | head -1 | \
-                      cut -d'=' -f2 | tr -d '\r' | sed 's/^[vV]//')
+            RAW=$(grep '^version=' module/module.prop | head -1 | \
+                  cut -d'=' -f2 | tr -d '\r' | sed 's/^[vV]//' | sed 's/[[:space:]]//g')
           fi
 
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Versi '$VERSION' tidak valid (harus x.y.z)"
+          echo "Raw version from $SOURCE: '$RAW'"
+
+          # Accept x, x.y, or x.y.z (digits only)
+          if ! [[ "$RAW" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            echo "::error::Invalid version '$RAW' (from $SOURCE). Expected: x, x.y, or x.y.z (e.g. 1.0.0)"
             exit 1
           fi
 
-          # versionCode: 2.2.0 → 20200
-          VC=$(echo "$VERSION" | awk -F'.' '{print $1*10000 + $2*100 + $3}')
+          # AUTO-NORMALIZE: "1" -> "1.0.0", "1.0" -> "1.0.0"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$RAW"
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+          VERSION="$MAJOR.$MINOR.$PATCH"
 
-          # Tanggal format tgl-bln-thn (WIB)
+          # versionCode: 1.0.0 -> 10000 | 2.1.0 -> 20100
+          VC=$((MAJOR*10000 + MINOR*100 + PATCH))
+
+          # Date format: dd-mm-yyyy (WIB timezone)
           DATE=$(TZ='Asia/Jakarta' date +'%d-%m-%Y')
 
           echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
           echo "version_code=$VC"     >> "$GITHUB_OUTPUT"
           echo "date=$DATE"           >> "$GITHUB_OUTPUT"
 
-          echo "📦 Versi   : v$VERSION (versionCode: $VC)"
-          echo "📅 Tanggal : $DATE"
+          echo "Version     : v$VERSION (versionCode: $VC) [source: $SOURCE]"
+          echo "Release date: $DATE"
 
-      - name: Cek tag & release (idempoten — anti rilis ganda)
+      - name: Check tag and release (prevent duplicate releases)
         id: check
         run: |
           TAG="v${{ steps.ver.outputs.version }}"
@@ -87,15 +93,15 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG")
           [ "$HTTP" = "200" ] && RELEASE_EXISTS="yes"
 
-          echo "Tag $TAG ada?     : $TAG_EXISTS"
-          echo "Release $TAG ada? : $RELEASE_EXISTS"
+          echo "Tag $TAG exists?     : $TAG_EXISTS"
+          echo "Release $TAG exists? : $RELEASE_EXISTS"
 
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
-            echo "⏩ Force mode → LANJUT"; RESULT="true"
+            echo "Force mode -> PROCEED"; RESULT="true"
           elif [ "$TAG_EXISTS" = "yes" ] && [ "$RELEASE_EXISTS" = "yes" ]; then
-            echo "⏭️ Sudah dirilis → SKIP"; RESULT="false"
+            echo "Already released -> SKIP"; RESULT="false"
           else
-            echo "🚀 Versi baru → LANJUT"; RESULT="true"
+            echo "New version -> PROCEED"; RESULT="true"
           fi
           echo "should_release=$RESULT" >> "$GITHUB_OUTPUT"
 
@@ -108,7 +114,7 @@ jobs:
           else
             LOG=$(git log --pretty=format:'- %s' --no-merges | head -50)
           fi
-          [ -z "$LOG" ] && LOG="- Rilis v${{ steps.ver.outputs.version }}"
+          [ -z "$LOG" ] && LOG="- Release v${{ steps.ver.outputs.version }}"
 
           {
             echo "changelog<<CHANGELOG_EOF"
@@ -117,10 +123,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   # ==========================================================
-  # JOB 2: Build 4 arsitektur + package
+  # JOB 2: Build all 4 architectures + package
   # ==========================================================
   build:
-    name: 🔨 Build Module
+    name: Build Module
     needs: prepare
     if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
@@ -143,24 +149,24 @@ jobs:
           unzip -q /tmp/ndk.zip -d /tmp
           mv /tmp/android-ndk-* "$NDK_DIR"
 
-      - name: Build semua arsitektur
+      - name: Build all architectures
         run: |
           export ANDROID_NDK="${{ runner.tool_cache }}/android-ndk"
           VERSION="${{ needs.prepare.outputs.version }}"
           VC="${{ needs.prepare.outputs.version_code }}"
           DATE="${{ needs.prepare.outputs.date }}"
 
-          # Inject versi final + tanggal rilis ke module.prop
+          # Inject final version and release date into module.prop
           sed -i "s/^version=.*/version=v${VERSION}/" module/module.prop
           sed -i "s/^versionCode=.*/versionCode=${VC}/" module/module.prop
-           sed -i "s#^description=.*#description=Universal Play Store Detach — Android 7-17+ | Rilis ${DATE}#" module/module.prop
+          sed -i "s|^description=.*|description=Universal Play Store Detach - Android 7-17+ \| Released ${DATE}|" module/module.prop
 
-          echo "── module.prop final ──"
+          echo "--- final module.prop ---"
           cat module/module.prop
 
-          mkdir -p build output
+          mkdir -p build
           for ARCH in arm64-v8a armeabi-v7a x86_64 x86; do
-            echo "═══ Building $ARCH ═══"
+            echo "=== Building $ARCH ==="
             cmake -B "build/$ARCH" \
               -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
               -DANDROID_ABI="$ARCH" \
@@ -169,33 +175,77 @@ jobs:
               -G Ninja
             ninja -C "build/$ARCH"
           done
-          echo "✓ 4 arsitektur selesai"
+          echo "All 4 architectures built successfully"
 
-      - name: Package
+      - name: Package module (files at zip ROOT)
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           DATE="${{ needs.prepare.outputs.date }}"
           ZIP="PlayStoreDetach-v${VERSION}-${DATE}.zip"
 
           cd output
-          rm -rf PlayStoreDetach
+          rm -rf PlayStoreDetach "$ZIP" "${ZIP}.sha256"
           mkdir -p PlayStoreDetach/zygisk/{arm64-v8a,armeabi-v7a,x86_64,x86}
+          mkdir -p PlayStoreDetach/META-INF/com/google/android
 
+          # Copy module files
           cp -r ../module/* PlayStoreDetach/
 
+          # Copy native libraries
           cp ../build/arm64-v8a/libzygisk-detach.so    PlayStoreDetach/zygisk/arm64-v8a/
           cp ../build/armeabi-v7a/libzygisk-detach.so  PlayStoreDetach/zygisk/armeabi-v7a/
           cp ../build/x86_64/libzygisk-detach.so       PlayStoreDetach/zygisk/x86_64/
           cp ../build/x86/libzygisk-detach.so          PlayStoreDetach/zygisk/x86/
 
-          chmod 0755 PlayStoreDetach/action.sh \
-                     PlayStoreDetach/service.sh \
-                     PlayStoreDetach/post-fs-data.sh \
-                     PlayStoreDetach/uninstall.sh 2>/dev/null || true
+          # Generate recovery installer files (inline, no extra files needed)
+          echo "#MAGISK" > PlayStoreDetach/META-INF/com/google/android/updater-script
 
-          zip -r "$ZIP" PlayStoreDetach/
+          cat > PlayStoreDetach/META-INF/com/google/android/update-binary <<'BINARY_EOF'
+          #!/sbin/sh
+          umask 022
+          ui_print() { echo "$1"; }
+          require_new_magisk() {
+            ui_print "*******************************"
+            ui_print " Please install Magisk v20.4+! "
+            ui_print "*******************************"
+            exit 1
+          }
+          OUTFD=$2
+          ZIPFILE=$3
+          mount /data 2>/dev/null
+          [ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
+          . /data/adb/magisk/util_functions.sh
+          [ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
+          install_module
+          exit 0
+          BINARY_EOF
+
+          # Fix permissions
+          chmod 0755 PlayStoreDetach/*.sh 2>/dev/null || true
+          chmod 0755 PlayStoreDetach/META-INF/com/google/android/update-binary
+
+          # ================================================
+          # KEY FIX: zip from INSIDE the folder using "."
+          # This puts module.prop at the ROOT of the zip,
+          # which is what Magisk/KernelSU expects.
+          # ================================================
+          cd PlayStoreDetach
+          zip -r9 "../$ZIP" .
+          cd ..
+
           sha256sum "$ZIP" > "${ZIP}.sha256"
-          ls -lh
+
+          # Verify structure - module.prop MUST appear without folder prefix
+          echo "================ ZIP STRUCTURE (must be correct) ================"
+          unzip -l "$ZIP"
+          echo "=================================================================="
+
+          # Hard fail if structure is wrong
+          if ! unzip -l "$ZIP" | grep -q " module.prop$"; then
+            echo "::error::module.prop not found at zip root! Packaging failed."
+            exit 1
+          fi
+          echo "Structure check PASSED: module.prop is at zip root"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -207,10 +257,10 @@ jobs:
           retention-days: 7
 
   # ==========================================================
-  # JOB 3: Tag + GitHub Release
+  # JOB 3: Create tag + GitHub Release
   # ==========================================================
   release:
-    name: 🚀 Publish
+    name: Publish Release
     needs: [prepare, build]
     if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
@@ -224,7 +274,7 @@ jobs:
           name: module-build
           path: artifact/
 
-      - name: Buat update.json (auto-update Magisk)
+      - name: Generate update.json (Magisk auto-update)
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           VC="${{ needs.prepare.outputs.version_code }}"
@@ -242,7 +292,7 @@ jobs:
           EOF
           cat artifact/update.json
 
-      - name: Buat tag jika belum ada
+      - name: Create tag if not exists
         run: |
           TAG="v${{ needs.prepare.outputs.version }}"
           if ! git rev-parse "$TAG" >/dev/null 2>&1; then
@@ -250,40 +300,40 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git tag "$TAG"
             git push origin "$TAG"
-            echo "✓ Tag $TAG dibuat"
+            echo "Tag $TAG created"
           else
-            echo "Tag $TAG sudah ada"
+            echo "Tag $TAG already exists"
           fi
 
-      - name: Buat GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.prepare.outputs.version }}
-          name: 🚀 PlayStoreDetach v${{ needs.prepare.outputs.version }} · ${{ needs.prepare.outputs.date }}
+          name: PlayStoreDetach v${{ needs.prepare.outputs.version }} - ${{ needs.prepare.outputs.date }}
           body: |
-            # 📦 PlayStoreDetach v${{ needs.prepare.outputs.version }}
+            # PlayStoreDetach v${{ needs.prepare.outputs.version }}
 
-            **📅 Tanggal Rilis:** ${{ needs.prepare.outputs.date }}
+            **Release Date:** ${{ needs.prepare.outputs.date }}
 
-            ## ✨ Perubahan
+            ## Changes
             ${{ needs.prepare.outputs.changelog }}
 
-            ## 📱 Kompatibilitas
+            ## Compatibility
             | | |
             |---|---|
-            | Android | 7.0 – 17+ (API 24-37+) |
-            | OEM | miui/hyperos, OneUI, ColorOS, OriginOS, EMUI, dll |
-            | Root | Magisk (Zygisk) · KernelSU/APatch (ReZygisk) |
-            | Arsitektur | arm64-v8a, armeabi-v7a, x86_64, x86 |
+            | Android | 7.0 - 17+ (API 24-37+) |
+            | OEM | miui/hyperos, OneUI, ColorOS, OriginOS, EMUI, and more |
+            | Root | Magisk (Zygisk) / KernelSU / APatch (with ReZygisk) |
+            | Architecture | arm64-v8a, armeabi-v7a, x86_64, x86 |
 
-            ## 📥 Instalasi
+            ## Installation
             1. Download `PlayStoreDetach-v${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.date }}.zip`
             2. Install via Magisk / KernelSU / APatch
-            3. **KernelSU/APatch:** pastikan ReZygisk terpasang
+            3. **KernelSU/APatch:** make sure ReZygisk is installed first
             4. Reboot
-            5. Kelola daftar detach via WebUI di manager
+            5. Manage detach list via WebUI in the manager app
 
-            > Verifikasi integritas file dengan `.sha256`
+            > Verify file integrity with the `.sha256` file
           files: |
             artifact/PlayStoreDetach-v*
             artifact/update.json
